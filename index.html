@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Envie sua foto ou vídeo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=Jost&display=swap">
+<style>
+body{font-family:'Jost',sans-serif;background:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;box-sizing:border-box}
+.card{max-width:340px;width:100%;text-align:center}
+img.logo{width:264px;margin-bottom:10px}
+h1{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:500;color:#3a3a3a;margin:0 0 6px;font-style:italic}
+.rule{width:36px;height:1px;background:#ccc;margin:0 auto 26px}
+input[type=file]{display:none}
+.pick-btn,.send-btn{display:block;width:100%;padding:14px;font-size:13px;letter-spacing:1px;cursor:pointer;box-sizing:border-box;margin-bottom:10px;border:1px solid #1a1a1a}
+.pick-btn{background:#fff;color:#1a1a1a}
+.send-btn{background:#1a1a1a;color:#fff}
+.send-btn:disabled{opacity:.3}
+#status{margin-top:12px;font-size:13px;color:#1a1a1a}
+#filename{font-size:12px;color:#999;margin-bottom:10px;min-height:16px}
+#progressWrap{display:none;background:#eee;height:2px;margin-bottom:10px}
+#progressBar{background:#1a1a1a;height:100%;width:0%}
+</style></head>
+<body>
+<div class="card">
+<img class="logo" src="logo-preto-transparente.png" alt="">
+<h1>Compartilhe esse momento do nosso casamento com a gente</h1>
+<div class="rule"></div>
+<label class="pick-btn" for="file">Escolher foto ou vídeo</label>
+<input type="file" id="file" accept="image/*,video/*">
+<div id="filename"></div>
+<div id="progressWrap"><div id="progressBar"></div></div>
+<button class="send-btn" id="sendBtn" disabled>Enviar</button>
+<div id="status"></div>
+</div>
+<script>
+var API_KEY='public_kW2K8w89RM3bov5RPLomrhe2Z7DT';var ACCOUNT_ID='kW2K8w8';
+var fileInput=document.getElementById('file');var sendBtn=document.getElementById('sendBtn');var filenameDiv=document.getElementById('filename');var statusDiv=document.getElementById('status');var progressWrap=document.getElementById('progressWrap');var progressBar=document.getElementById('progressBar');
+fileInput.addEventListener('change',function(){if(fileInput.files.length>0){filenameDiv.textContent=fileInput.files[0].name;sendBtn.disabled=false;statusDiv.textContent='';}});
+sendBtn.addEventListener('click',function(){var file=fileInput.files[0];if(!file)return;sendBtn.disabled=true;progressWrap.style.display='block';progressBar.style.width='0%';statusDiv.textContent='Enviando... 0%';var uniqueName=Date.now()+'-'+Math.random().toString(36).slice(2,8)+'-'+file.name;var url='https://api.bytescale.com/v2/accounts/'+ACCOUNT_ID+'/uploads/binary?fileName='+encodeURIComponent(uniqueName);var xhr=new XMLHttpRequest();xhr.open('POST',url,true);xhr.setRequestHeader('Authorization','Bearer '+API_KEY);xhr.setRequestHeader('Content-Type',file.type||'application/octet-stream');xhr.upload.onprogress=function(evt){if(evt.lengthComputable){var pct=Math.round((evt.loaded/evt.total)*100);progressBar.style.width=pct+'%';statusDiv.textContent='Enviando... '+pct+'%';}};xhr.onload=function(){progressWrap.style.display='none';if(xhr.status>=200&&xhr.status<300){statusDiv.textContent='✅ Enviado! Obrigado!';fileInput.value='';filenameDiv.textContent='';}else{statusDiv.textContent='❌ Erro ao enviar, tenta de novo.';sendBtn.disabled=false;}};xhr.onerror=function(){progressWrap.style.display='none';statusDiv.textContent='❌ Erro ao enviar, tenta de novo.';sendBtn.disabled=false;};xhr.send(file);});
+</script>
+</body></html>
