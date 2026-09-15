@@ -27,6 +27,8 @@ input[type=file]{display:none}
 #progressWrap{display:none;background:#eee;height:2px;margin-top:10px}
 #progressBar{background:#1a1a1a;height:100%;width:0%}
 #status{margin-top:14px;font-size:13px;color:#1a1a1a;min-height:16px}
+.whatsapp-btn{display:none;width:100%;padding:13px;font-size:13px;letter-spacing:.5px;cursor:pointer;box-sizing:border-box;border:1px solid #25D366;background:#25D366;color:#fff;margin-top:10px;border-radius:4px}
+.whatsapp-btn.show{display:block}
 </style></head>
 <body>
 <div class="card">
@@ -35,7 +37,7 @@ input[type=file]{display:none}
 <div class="rule"></div>
 
 <div class="step">
-  <div class="step-label"><span class="step-num">1</span><span class="step-text">Escolha sua foto ou vídeo</span></div>
+  <div class="step-label"><span class="step-num">1</span><span class="step-text">Escolha sua foto ou um vídeo curto</span></div>
   <label class="pick-btn" for="file">Escolher foto/vídeo</label>
   <input type="file" id="file" accept="image/*,video/*">
   <div class="preview-box" id="previewBox"></div>
@@ -48,10 +50,17 @@ input[type=file]{display:none}
 </div>
 
 <div id="status"></div>
+<button class="whatsapp-btn" id="whatsappBtn" type="button">📲 Abrir WhatsApp</button>
 </div>
 <script>
-var API_KEY='public_kW2K8w89RM3bov5RPLomrhe2Z7DT';var ACCOUNT_ID='kW2K8w8';
-var fileInput=document.getElementById('file');var sendBtn=document.getElementById('sendBtn');var statusDiv=document.getElementById('status');var progressWrap=document.getElementById('progressWrap');var progressBar=document.getElementById('progressBar');var step2=document.getElementById('step2');var previewBox=document.getElementById('previewBox');
+var API_KEY='public_kW2K8w89RM3bov5RPLomrhe2Z7DT';var ACCOUNT_ID='kW2K8w8';var WHATSAPP_NUMBER='5541997713790';
+var NIGHT_CUTOFF_HOUR=19; // a partir dessa hora (do relogio do celular do convidado) o limite sobe
+function getMaxFileBytes(){
+  var hour=new Date().getHours();
+  return (hour>=NIGHT_CUTOFF_HOUR?300:200)*1024*1024;
+}
+var DEBUG_FAIL=new URLSearchParams(location.search).get('debugFail'); // teste local: ?debugFail=1 simula erro sem chamar a API de verdade
+var fileInput=document.getElementById('file');var sendBtn=document.getElementById('sendBtn');var statusDiv=document.getElementById('status');var progressWrap=document.getElementById('progressWrap');var progressBar=document.getElementById('progressBar');var step2=document.getElementById('step2');var previewBox=document.getElementById('previewBox');var whatsappBtn=document.getElementById('whatsappBtn');
 
 function showFileChip(icon,name,hint){
   previewBox.innerHTML='';
@@ -65,6 +74,16 @@ function showFileChip(icon,name,hint){
 
 fileInput.addEventListener('change',function(){
   var file=fileInput.files[0];if(!file)return;
+  whatsappBtn.classList.remove('show');
+  var maxBytes=getMaxFileBytes();
+  if(file.size>maxBytes){
+    var mb=(file.size/1024/1024).toFixed(0);var maxMb=Math.round(maxBytes/1024/1024);
+    previewBox.classList.add('show');
+    showFileChip('⚠️',file.name,'Esse arquivo tem '+mb+'MB — o limite agora é '+maxMb+'MB. Tenta um vídeo mais curto, ou manda por WhatsApp:');
+    sendBtn.disabled=true;step2.setAttribute('data-disabled','true');statusDiv.textContent='';
+    whatsappBtn.classList.add('show');
+    return;
+  }
   previewBox.classList.add('show');
   if(file.type.indexOf('image')===0){
     try{
@@ -78,12 +97,37 @@ fileInput.addEventListener('change',function(){
   }else{
     showFileChip('🎬',file.name,null);
   }
-  sendBtn.disabled=false;step2.setAttribute('data-disabled','false');statusDiv.textContent='';
+  sendBtn.disabled=false;step2.setAttribute('data-disabled','false');statusDiv.textContent='';whatsappBtn.classList.remove('show');
 });
+
+whatsappBtn.addEventListener('click',function(){
+  window.open('https://wa.me/'+WHATSAPP_NUMBER,'_blank');
+});
+
+function handleUploadFailure(rawResponseText){
+  // Formato real da API (confirmado em 2026-09-15 com requisicoes de teste):
+  // {"error":{"message":"...","code":"...","timestamp":"..."}}
+  var code=null,msg=null;
+  try{var parsed=JSON.parse(rawResponseText);if(parsed&&parsed.error){code=parsed.error.code;msg=parsed.error.message;}}catch(e){}
+  if(code||msg)console.log('Bytescale error — code:',code,'message:',msg);
+  progressWrap.style.display='none';
+  statusDiv.textContent='❌ Erro ao enviar. Tenta de novo ou manda por WhatsApp:';
+  sendBtn.disabled=false;whatsappBtn.classList.add('show');
+}
 
 sendBtn.addEventListener('click',function(){
   var file=fileInput.files[0];if(!file)return;
-  sendBtn.disabled=true;progressWrap.style.display='block';progressBar.style.width='0%';statusDiv.textContent='Enviando... 0%';
+  sendBtn.disabled=true;progressWrap.style.display='block';progressBar.style.width='0%';statusDiv.textContent='Enviando... 0%';whatsappBtn.classList.remove('show');
+
+  if(DEBUG_FAIL){
+    // Teste local (?debugFail=1) — simula falha sem chamar a API de verdade, pra nao gastar espaco/tempo real
+    setTimeout(function(){progressBar.style.width='45%';statusDiv.textContent='Enviando... 45%';},300);
+    setTimeout(function(){
+      handleUploadFailure(JSON.stringify({error:{message:'Erro simulado para teste local (?debugFail='+DEBUG_FAIL+')',code:'debug_simulated_failure',timestamp:new Date().toISOString()}}));
+    },900);
+    return;
+  }
+
   var uniqueName=Date.now()+'-'+Math.random().toString(36).slice(2,8)+'-'+file.name;
   var url='https://api.bytescale.com/v2/accounts/'+ACCOUNT_ID+'/uploads/binary?fileName='+encodeURIComponent(uniqueName);
   var xhr=new XMLHttpRequest();
@@ -92,16 +136,16 @@ sendBtn.addEventListener('click',function(){
   xhr.setRequestHeader('Content-Type',file.type||'application/octet-stream');
   xhr.upload.onprogress=function(evt){if(evt.lengthComputable){var pct=Math.round((evt.loaded/evt.total)*100);progressBar.style.width=pct+'%';statusDiv.textContent='Enviando... '+pct+'%';}};
   xhr.onload=function(){
-    progressWrap.style.display='none';
     if(xhr.status>=200&&xhr.status<300){
+      progressWrap.style.display='none';
       statusDiv.textContent='✅ Enviado! Obrigado!';
       fileInput.value='';previewBox.classList.remove('show');previewBox.innerHTML='';
-      step2.setAttribute('data-disabled','true');
+      step2.setAttribute('data-disabled','true');whatsappBtn.classList.remove('show');
     }else{
-      statusDiv.textContent='❌ Erro ao enviar, tenta de novo.';sendBtn.disabled=false;
+      handleUploadFailure(xhr.responseText);
     }
   };
-  xhr.onerror=function(){progressWrap.style.display='none';statusDiv.textContent='❌ Erro ao enviar, tenta de novo.';sendBtn.disabled=false;};
+  xhr.onerror=function(){handleUploadFailure('');};
   xhr.send(file);
 });
 </script>
