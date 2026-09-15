@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Envie sua foto ou vÃ­deo</title>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Envie sua foto ou vídeo</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=Jost:wght@400;600&display=swap">
 <style>
 body{font-family:'Jost',sans-serif;background:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;box-sizing:border-box}
@@ -35,15 +35,15 @@ input[type=file]{display:none}
 <div class="rule"></div>
 
 <div class="step">
-  <div class="step-label"><span class="step-num">1</span><span class="step-text">Escolha sua foto ou vÃ­deo</span></div>
-  <label class="pick-btn" for="file">Escolher foto/vÃ­deo</label>
+  <div class="step-label"><span class="step-num">1</span><span class="step-text">Escolha sua foto ou vídeo</span></div>
+  <label class="pick-btn" for="file">Escolher foto/vídeo</label>
   <input type="file" id="file" accept="image/*,video/*">
   <div class="preview-box" id="previewBox"></div>
 </div>
 
 <div class="step" id="step2" data-disabled="true">
   <div class="step-label"><span class="step-num">2</span><span class="step-text">Confira acima e clique pra compartilhar</span></div>
-  <button class="send-btn" id="sendBtn" disabled>Compartilhar foto/vÃ­deo</button>
+  <button class="send-btn" id="sendBtn" disabled>Compartilhar foto/vídeo</button>
   <div id="progressWrap"><div id="progressBar"></div></div>
 </div>
 
@@ -70,13 +70,13 @@ fileInput.addEventListener('change',function(){
     try{
       var reader=new FileReader();
       reader.onload=function(e){previewBox.innerHTML='';var img=document.createElement('img');img.src=e.target.result;previewBox.appendChild(img);};
-      reader.onerror=function(){showFileChip('ðŸ“Ž',file.name,'carregada, pronta pra enviar');};
+      reader.onerror=function(){showFileChip('📎',file.name,'carregada, pronta pra enviar');};
       reader.readAsDataURL(file);
     }catch(err){
-      showFileChip('ðŸ“Ž',file.name,'carregada, pronta pra enviar');
+      showFileChip('📎',file.name,'carregada, pronta pra enviar');
     }
   }else{
-    showFileChip('ðŸŽ¬',file.name,null);
+    showFileChip('🎬',file.name,null);
   }
   sendBtn.disabled=false;step2.setAttribute('data-disabled','false');statusDiv.textContent='';
 });
@@ -94,14 +94,14 @@ sendBtn.addEventListener('click',function(){
   xhr.onload=function(){
     progressWrap.style.display='none';
     if(xhr.status>=200&&xhr.status<300){
-      statusDiv.textContent='âœ… Enviado! Obrigado!';
+      statusDiv.textContent='✅ Enviado! Obrigado!';
       fileInput.value='';previewBox.classList.remove('show');previewBox.innerHTML='';
       step2.setAttribute('data-disabled','true');
     }else{
-      statusDiv.textContent='âŒ Erro ao enviar, tenta de novo.';sendBtn.disabled=false;
+      statusDiv.textContent='❌ Erro ao enviar, tenta de novo.';sendBtn.disabled=false;
     }
   };
-  xhr.onerror=function(){progressWrap.style.display='none';statusDiv.textContent='âŒ Erro ao enviar, tenta de novo.';sendBtn.disabled=false;};
+  xhr.onerror=function(){progressWrap.style.display='none';statusDiv.textContent='❌ Erro ao enviar, tenta de novo.';sendBtn.disabled=false;};
   xhr.send(file);
 });
 </script>
