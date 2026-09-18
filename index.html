@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Envie sua foto ou vídeo</title>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Envie suas fotos ou vídeos</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=Jost:wght@400;600&display=swap">
 <style>
 body{font-family:'Jost',sans-serif;background:#fff;display:flex;align-items:flex-start;justify-content:center;min-height:100vh;margin:0;padding:36px 20px 20px;box-sizing:border-box}
@@ -16,14 +16,20 @@ h1{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:500;color:#
 input[type=file]{display:none}
 .pick-btn,.send-btn{display:block;width:100%;padding:14px;font-size:13px;letter-spacing:1px;cursor:pointer;box-sizing:border-box;border:1px solid #1a1a1a;text-align:center}
 .pick-btn{background:#fff;color:#1a1a1a}
+.pick-btn.locked{opacity:.35;pointer-events:none}
 .send-btn{background:#1a1a1a;color:#fff}
 .send-btn:disabled{opacity:.3;cursor:default}
-.preview-box{display:none;width:100%;height:170px;border:1px solid #eee;background:#fafafa;margin-top:12px;align-items:center;justify-content:center;overflow:hidden}
-.preview-box.show{display:flex}
-.preview-box img{max-width:100%;max-height:100%;object-fit:contain}
-.preview-box .file-chip{font-size:13px;color:#666;word-break:break-all;padding:0 10px}
-.preview-box .file-chip .icon{font-size:28px;display:block;margin-bottom:6px}
-.preview-box .file-chip .hint{font-size:11px;color:#aaa;display:block;margin-top:4px}
+#fileList{display:none;margin-top:12px;border:1px solid #eee;background:#fafafa;max-height:260px;overflow-y:auto}
+#fileList.show{display:block}
+.file-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid #eee}
+.file-item:last-child{border-bottom:none}
+.file-item .thumb{width:38px;height:38px;flex:none;background:#eee;display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden}
+.file-item .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.file-item .info{flex:1;min-width:0}
+.file-item .name{font-size:11.5px;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-item .sub{font-size:10px;color:#999;margin-top:1px}
+.file-item.invalid .sub{color:#c0392b}
+.file-item .status{flex:none;font-size:15px;width:20px;text-align:center}
 #progressWrap{display:none;background:#eee;height:2px;margin-top:10px}
 #progressBar{background:#1a1a1a;height:100%;width:0%}
 #status{margin-top:14px;font-size:13px;color:#1a1a1a;min-height:16px}
@@ -37,15 +43,15 @@ input[type=file]{display:none}
 <div class="rule"></div>
 
 <div class="step">
-  <div class="step-label"><span class="step-num">1</span><span class="step-text">Escolha sua foto ou um vídeo curto</span></div>
-  <label class="pick-btn" for="file">Escolher foto/vídeo</label>
-  <input type="file" id="file" accept="image/*,video/*">
-  <div class="preview-box" id="previewBox"></div>
+  <div class="step-label"><span class="step-num">1</span><span class="step-text">Escolha suas fotos ou vídeos (pode escolher várias de uma vez)</span></div>
+  <label class="pick-btn" for="file" id="pickBtn">Escolher fotos/vídeos</label>
+  <input type="file" id="file" accept="image/*,video/*" multiple>
+  <div id="fileList"></div>
 </div>
 
 <div class="step" id="step2" data-disabled="true">
   <div class="step-label"><span class="step-num">2</span><span class="step-text">Confira acima e clique pra compartilhar</span></div>
-  <button class="send-btn" id="sendBtn" disabled>Compartilhar foto/vídeo</button>
+  <button class="send-btn" id="sendBtn" disabled>Compartilhar</button>
   <div id="progressWrap"><div id="progressBar"></div></div>
 </div>
 
@@ -54,99 +60,158 @@ input[type=file]{display:none}
 </div>
 <script>
 var API_KEY='public_kW2K8w89RM3bov5RPLomrhe2Z7DT';var ACCOUNT_ID='kW2K8w8';var WHATSAPP_NUMBER='5541997713790';
-var NIGHT_CUTOFF_HOUR=19; // a partir dessa hora (do relogio do celular do convidado) o limite sobe
+var NIGHT_CUTOFF_HOUR=19;
+var STALL_MS=35000; // sem NENHUM progresso por 35s = considera aquele arquivo travado, desiste dele e segue pro proximo
 function getMaxFileBytes(){
   var hour=new Date().getHours();
   return (hour>=NIGHT_CUTOFF_HOUR?300:200)*1024*1024;
 }
-var DEBUG_FAIL=new URLSearchParams(location.search).get('debugFail'); // teste local: ?debugFail=1 simula erro sem chamar a API de verdade
-var fileInput=document.getElementById('file');var sendBtn=document.getElementById('sendBtn');var statusDiv=document.getElementById('status');var progressWrap=document.getElementById('progressWrap');var progressBar=document.getElementById('progressBar');var step2=document.getElementById('step2');var previewBox=document.getElementById('previewBox');var whatsappBtn=document.getElementById('whatsappBtn');
+var DEBUG_FAIL=new URLSearchParams(location.search).get('debugFail');
+var fileInput=document.getElementById('file');var sendBtn=document.getElementById('sendBtn');var statusDiv=document.getElementById('status');var progressWrap=document.getElementById('progressWrap');var progressBar=document.getElementById('progressBar');var step2=document.getElementById('step2');var fileList=document.getElementById('fileList');var whatsappBtn=document.getElementById('whatsappBtn');var pickBtn=document.getElementById('pickBtn');
 
-function showFileChip(icon,name,hint){
-  previewBox.innerHTML='';
-  var wrap=document.createElement('div');wrap.className='file-chip';
-  var iconEl=document.createElement('span');iconEl.className='icon';iconEl.textContent=icon;
-  var nameEl=document.createElement('span');nameEl.textContent=name;
-  wrap.appendChild(iconEl);wrap.appendChild(nameEl);
-  if(hint){var hintEl=document.createElement('span');hintEl.className='hint';hintEl.textContent=hint;wrap.appendChild(hintEl);}
-  previewBox.appendChild(wrap);
+function lockPicker(lock){
+  fileInput.disabled=lock;
+  pickBtn.classList.toggle('locked',lock);
 }
 
-fileInput.addEventListener('change',function(){
-  var file=fileInput.files[0];if(!file)return;
-  whatsappBtn.classList.remove('show');
-  var maxBytes=getMaxFileBytes();
-  if(file.size>maxBytes){
-    var mb=(file.size/1024/1024).toFixed(0);var maxMb=Math.round(maxBytes/1024/1024);
-    previewBox.classList.add('show');
-    showFileChip('⚠️',file.name,'Esse arquivo tem '+mb+'MB — o limite agora é '+maxMb+'MB. Tenta um vídeo mais curto, ou manda por WhatsApp:');
-    sendBtn.disabled=true;step2.setAttribute('data-disabled','true');statusDiv.textContent='';
-    whatsappBtn.classList.add('show');
-    return;
-  }
-  previewBox.classList.add('show');
-  if(file.type.indexOf('image')===0){
+var items=[]; // {file, valid, row, statusEl, thumbEl}
+
+function humanSize(bytes){return (bytes/1024/1024).toFixed(1)+'MB';}
+
+function buildRow(file, valid, generateThumb){
+  var row=document.createElement('div');row.className='file-item'+(valid?'':' invalid');
+  var thumb=document.createElement('div');thumb.className='thumb';thumb.textContent=file.type.indexOf('image')===0?'🖼️':'🎬';
+  var info=document.createElement('div');info.className='info';
+  var name=document.createElement('div');name.className='name';name.textContent=file.name;
+  var sub=document.createElement('div');sub.className='sub';sub.textContent=valid?humanSize(file.size):(humanSize(file.size)+' — acima do limite, não vai ser enviada');
+  info.appendChild(name);info.appendChild(sub);
+  var status=document.createElement('div');status.className='status';status.textContent=valid?'':'⚠️';
+  row.appendChild(thumb);row.appendChild(info);row.appendChild(status);
+  fileList.appendChild(row);
+  // So gera miniatura de verdade quando é 1 arquivo so — com varios de uma vez,
+  // ler/converter cada foto pra base64 ao mesmo tempo pode travar celular mais fraco.
+  if(generateThumb && valid && file.type.indexOf('image')===0){
     try{
       var reader=new FileReader();
-      reader.onload=function(e){previewBox.innerHTML='';var img=document.createElement('img');img.src=e.target.result;previewBox.appendChild(img);};
-      reader.onerror=function(){showFileChip('📎',file.name,'carregada, pronta pra enviar');};
+      reader.onload=function(e){var img=document.createElement('img');img.src=e.target.result;thumb.innerHTML='';thumb.appendChild(img);};
       reader.readAsDataURL(file);
-    }catch(err){
-      showFileChip('📎',file.name,'carregada, pronta pra enviar');
-    }
-  }else{
-    showFileChip('🎬',file.name,null);
+    }catch(err){}
   }
-  sendBtn.disabled=false;step2.setAttribute('data-disabled','false');statusDiv.textContent='';whatsappBtn.classList.remove('show');
+  return { sub: sub, status: status };
+}
+
+var MAX_FILES_PER_BATCH=15;
+
+fileInput.addEventListener('change',function(){
+  var files=Array.prototype.slice.call(fileInput.files);
+  if(!files.length)return;
+  whatsappBtn.classList.remove('show');statusDiv.textContent='';
+  if(files.length>MAX_FILES_PER_BATCH){
+    fileList.innerHTML='';fileList.classList.remove('show');items=[];
+    sendBtn.disabled=true;step2.setAttribute('data-disabled','true');sendBtn.textContent='Compartilhar';
+    fileInput.value='';
+    statusDiv.textContent='Você escolheu '+files.length+' arquivos — o máximo é '+MAX_FILES_PER_BATCH+' de cada vez. Escolhe de novo com menos, ou manda em 2 vezes.';
+    return;
+  }
+  fileList.innerHTML='';fileList.classList.add('show');
+  var maxBytes=getMaxFileBytes();var maxMb=Math.round(maxBytes/1024/1024);
+  var singleFile=files.length===1;
+  items=files.map(function(file){
+    var valid=file.size<=maxBytes;
+    var ui=buildRow(file, valid, singleFile);
+    return { file:file, valid:valid, sent:false, sub:ui.sub, status:ui.status };
+  });
+  var validCount=items.filter(function(it){return it.valid;}).length;
+  if(validCount>0){
+    sendBtn.disabled=false;step2.setAttribute('data-disabled','false');
+    sendBtn.textContent=validCount===1?'Compartilhar 1 arquivo':'Compartilhar '+validCount+' arquivos';
+  }else{
+    sendBtn.disabled=true;step2.setAttribute('data-disabled','true');
+    sendBtn.textContent='Compartilhar';
+  }
+  if(items.some(function(it){return !it.valid;})){
+    statusDiv.textContent='Arquivo(s) acima de '+maxMb+'MB não vão ser enviados (marcados acima).';
+  }
 });
 
 whatsappBtn.addEventListener('click',function(){
   window.open('https://wa.me/'+WHATSAPP_NUMBER,'_blank');
 });
 
-function handleUploadFailure(rawResponseText){
-  // Formato real da API (confirmado em 2026-09-15 com requisicoes de teste):
-  // {"error":{"message":"...","code":"...","timestamp":"..."}}
-  var code=null,msg=null;
-  try{var parsed=JSON.parse(rawResponseText);if(parsed&&parsed.error){code=parsed.error.code;msg=parsed.error.message;}}catch(e){}
-  if(code||msg)console.log('Bytescale error — code:',code,'message:',msg);
-  progressWrap.style.display='none';
-  statusDiv.textContent='❌ Erro ao enviar. Tenta de novo ou manda por WhatsApp:';
-  sendBtn.disabled=false;whatsappBtn.classList.add('show');
+function uploadOne(it){
+  return new Promise(function(resolve){
+    it.status.textContent='⏳';
+    if(DEBUG_FAIL){
+      // Mesmo sentido da pagina de 1 arquivo: qualquer valor em ?debugFail= simula erro (em TODOS os arquivos do lote)
+      setTimeout(function(){
+        it.status.textContent='❌';
+        resolve(false);
+      }, 500);
+      return;
+    }
+    var file=it.file;
+    var uniqueName=Date.now()+'-'+Math.random().toString(36).slice(2,8)+'-'+file.name;
+    var url='https://api.bytescale.com/v2/accounts/'+ACCOUNT_ID+'/uploads/binary?fileName='+encodeURIComponent(uniqueName);
+    var xhr=new XMLHttpRequest();
+    var stallTimer=null;
+    function armStallTimer(){
+      clearTimeout(stallTimer);
+      stallTimer=setTimeout(function(){xhr.abort();},STALL_MS);
+    }
+    xhr.open('POST',url,true);
+    xhr.setRequestHeader('Authorization','Bearer '+API_KEY);
+    xhr.setRequestHeader('Content-Type',file.type||'application/octet-stream');
+    xhr.upload.onprogress=function(evt){
+      armStallTimer();
+      if(evt.lengthComputable){var pct=Math.round((evt.loaded/evt.total)*100);it.status.textContent=pct+'%';}
+    };
+    xhr.onload=function(){
+      clearTimeout(stallTimer);
+      var ok=xhr.status>=200&&xhr.status<300;
+      it.status.textContent=ok?'✅':'❌';
+      if(!ok){try{var parsed=JSON.parse(xhr.responseText);if(parsed&&parsed.error)console.log('Bytescale error:',parsed.error);}catch(e){}}
+      resolve(ok);
+    };
+    xhr.onerror=function(){clearTimeout(stallTimer);it.status.textContent='❌';resolve(false);};
+    xhr.onabort=function(){clearTimeout(stallTimer);it.status.textContent='❌';resolve(false);};
+    armStallTimer();
+    xhr.send(file);
+  });
 }
 
 sendBtn.addEventListener('click',function(){
-  var file=fileInput.files[0];if(!file)return;
-  sendBtn.disabled=true;progressWrap.style.display='block';progressBar.style.width='0%';statusDiv.textContent='Enviando... 0%';whatsappBtn.classList.remove('show');
-
-  if(DEBUG_FAIL){
-    // Teste local (?debugFail=1) — simula falha sem chamar a API de verdade, pra nao gastar espaco/tempo real
-    setTimeout(function(){progressBar.style.width='45%';statusDiv.textContent='Enviando... 45%';},300);
-    setTimeout(function(){
-      handleUploadFailure(JSON.stringify({error:{message:'Erro simulado para teste local (?debugFail='+DEBUG_FAIL+')',code:'debug_simulated_failure',timestamp:new Date().toISOString()}}));
-    },900);
-    return;
-  }
-
-  var uniqueName=Date.now()+'-'+Math.random().toString(36).slice(2,8)+'-'+file.name;
-  var url='https://api.bytescale.com/v2/accounts/'+ACCOUNT_ID+'/uploads/binary?fileName='+encodeURIComponent(uniqueName);
-  var xhr=new XMLHttpRequest();
-  xhr.open('POST',url,true);
-  xhr.setRequestHeader('Authorization','Bearer '+API_KEY);
-  xhr.setRequestHeader('Content-Type',file.type||'application/octet-stream');
-  xhr.upload.onprogress=function(evt){if(evt.lengthComputable){var pct=Math.round((evt.loaded/evt.total)*100);progressBar.style.width=pct+'%';statusDiv.textContent='Enviando... '+pct+'%';}};
-  xhr.onload=function(){
-    if(xhr.status>=200&&xhr.status<300){
+  // So reenvia arquivos validos que ainda NAO foram enviados com sucesso antes
+  // (evita duplicar no storage quando a pessoa clica "tentar de novo" apos falha parcial)
+  var toSend=items.filter(function(it){return it.valid && !it.sent;});
+  if(!toSend.length)return;
+  sendBtn.disabled=true;lockPicker(true);progressWrap.style.display='block';whatsappBtn.classList.remove('show');
+  var done=0,failed=0;
+  function next(i){
+    if(i>=toSend.length){
       progressWrap.style.display='none';
-      statusDiv.textContent='✅ Enviado! Obrigado!';
-      fileInput.value='';previewBox.classList.remove('show');previewBox.innerHTML='';
-      step2.setAttribute('data-disabled','true');whatsappBtn.classList.remove('show');
-    }else{
-      handleUploadFailure(xhr.responseText);
+      if(failed===0){
+        statusDiv.textContent='✅ '+done+' enviado(s)! Obrigado!';
+        fileInput.value='';fileList.classList.remove('show');fileList.innerHTML='';items=[];
+        step2.setAttribute('data-disabled','true');
+        lockPicker(false);
+      }else{
+        statusDiv.textContent='⚠️ '+(done-failed)+' de '+done+' enviados. '+failed+' falharam — tenta de novo ou manda por WhatsApp:';
+        sendBtn.disabled=false;
+        sendBtn.textContent=failed===1?'Tentar de novo (1 arquivo)':'Tentar de novo ('+failed+' arquivos)';
+        whatsappBtn.classList.add('show');
+        lockPicker(false);
+      }
+      return;
     }
-  };
-  xhr.onerror=function(){handleUploadFailure('');};
-  xhr.send(file);
+    progressBar.style.width=Math.round((i/toSend.length)*100)+'%';
+    statusDiv.textContent='Enviando '+(i+1)+' de '+toSend.length+'...';
+    uploadOne(toSend[i]).then(function(ok){
+      toSend[i].sent=ok;
+      done++;if(!ok)failed++;
+      next(i+1);
+    });
+  }
+  next(0);
 });
 </script>
 </body></html>
