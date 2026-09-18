@@ -193,6 +193,7 @@ sendBtn.addEventListener('click',function(){
         statusDiv.textContent='✅ '+done+' enviado(s)! Obrigado!';
         fileInput.value='';fileList.classList.remove('show');fileList.innerHTML='';items=[];
         step2.setAttribute('data-disabled','true');
+        sendBtn.textContent='Compartilhar';
         lockPicker(false);
       }else{
         statusDiv.textContent='⚠️ '+(done-failed)+' de '+done+' enviados. '+failed+' falharam — tenta de novo ou manda por WhatsApp:';
